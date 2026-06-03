@@ -1,0 +1,22 @@
+# Core
+numpy==1.26.4
+scipy==1.13.1
+
+# Deep learning (CUDA 11.8 build — see README for GPU setup)
+torch==2.7.1
+torchvision==0.22.1
+torchaudio==2.7.1
+
+# Graph neural networks
+torch-geometric==2.6.1
+
+# nuScenes
+nuscenes-devkit==1.2.0
+pyquaternion==0.9.9
+
+# Geometry (HD-map drivable-area polygons)
+shapely==2.0.7
+networkx==3.2.1
+
+# Visualization
+matplotlib==3.9.4
