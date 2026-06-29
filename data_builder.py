@@ -4,7 +4,7 @@ import torch
 from nuscenes.nuscenes import NuScenes
 from pyquaternion import Quaternion
 
-# --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ 1: Ιστορικό του Δικού μας Οχήματος ---
+# ---  Ιστορικό του Δικού μας Οχήματος ---
 def get_ego_history(nusc, current_sample, ego_translation, inverse_quat, frames_back=4):
     trajectory = []
     curr_sample_token = current_sample['token']
@@ -31,6 +31,33 @@ def get_ego_history(nusc, current_sample, ego_translation, inverse_quat, frames_
     trajectory.reverse() 
     return trajectory
 
+
+
+# ---  mellon του Δικού μας Οχήματος ---
+def get_ego_future(nusc, current_sample, ego_translation, inverse_quat, frames_forward=12):
+    trajectory = []
+    curr_sample_token = current_sample['next']
+    
+    for _ in range(frames_forward): 
+        if curr_sample_token == '':
+            trajectory.append(trajectory[-1] if len(trajectory) > 0 else [0.0, 0.0])
+            continue
+            
+        sample = nusc.get('sample', curr_sample_token)
+        lidar_data = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
+        ego_pose = nusc.get('ego_pose', lidar_data['ego_pose_token'])
+        
+        global_pos = np.array(ego_pose['translation'])
+        shifted = global_pos - ego_translation
+        local_pos = inverse_quat.rotate(shifted)
+        
+        trajectory.append([local_pos[0], local_pos[1]])
+        curr_sample_token = sample['next'] # Πάμε ένα καρέ μπροστα!
+
+    return trajectory
+
+
+
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ 2: Ιστορικό των Άλλων Οχημάτων ---
 def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_back=4):
     trajectory = []
@@ -53,30 +80,65 @@ def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_ba
     trajectory.reverse()
     return trajectory
 
-def build_spatiotemporal_graph():
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    dataroot = os.path.join(current_dir, 'data', 'raw')
-    nusc = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=False)
+#-- get target future  --
+def get_target_future(nusc, ann_token, ego_translation, inverse_quat, frames_forward=12):
+    trajectory = []
+    ann = nusc.get('sample_annotation',ann_token)
+    curr_ann_token = ann['next'] #<-- t+1
     
-    scene = nusc.scene[0]
-    sample = nusc.get('sample', scene['first_sample_token'])
+    for _ in range(frames_forward):
+        if curr_ann_token == '':
+            #to oxima eksafanistike h teleiwse h skini padding
+            trajectory.append(trajectory[-1] if len(trajectory) > 0 else [0.0, 0.0])
+            continue
+            
+        ann = nusc.get('sample_annotation', curr_ann_token)
+        
+        global_pos = np.array(ann['translation'])
+        shifted = global_pos - ego_translation
+        local_pos = inverse_quat.rotate(shifted)
+        
+        trajectory.append([local_pos[0], local_pos[1]])
+        curr_ann_token = ann['next']
+        
+    return trajectory
+
+
+
+#creating the scene
+def get_scene_sample_tokens(nusc, scene):
+    tokens = []
+    token = scene['first_sample_token']   # το πρώτο sample
     
-    # 1. Βρίσκουμε τη βάση μας (Πού είμαστε ΣΗΜΕΡΑ)
+    while token != '':
+     
+        tokens.append(token)
+        token = nusc.get('sample',token)['next']
+    return tokens
+
+
+
+
+def build_graph_from_sample(nusc,sample):
+   
+    # 1.find where we are
     lidar_data = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
     ego_pose = nusc.get('ego_pose', lidar_data['ego_pose_token'])
     ego_translation = np.array(ego_pose['translation'])
     inverse_quat = Quaternion(ego_pose['rotation']).inverse
 
-    print("⏳ Σάρωση του χάρτη και εξαγωγή Ιστορικού (Ταξίδι στον Χρόνο)...")
-
-    # 2. Φτιάχνουμε τους Κόμβους (Τώρα δεν είναι απλά [x,y], αλλά μια λίστα με 5 χρονικά σημεία!)
+    # 2. a list of nodes not just [x,y]  but 5 time spots
     nodes_data = []
-    
-    # Α. Παίρνουμε το δικό μας ιστορικό (Κόμβος 0)
+    future_data=[]
+
+    ego_fut = get_ego_future(nusc,sample,ego_translation,inverse_quat)
+    future_data.append(ego_fut)
+
+    # get our history (node 0)
     ego_traj = get_ego_history(nusc, sample, ego_translation, inverse_quat)
     nodes_data.append(ego_traj)
 
-    # Β. Παίρνουμε το ιστορικό των άλλων (Κόμβοι 1, 2, 3...)
+    #get history loc (nodes) of the other cars
     for ann_token in sample['anns']:
         ann = nusc.get('sample_annotation', ann_token)
         if 'vehicle' in ann['category_name']:
@@ -88,28 +150,51 @@ def build_spatiotemporal_graph():
                 target_traj = get_target_history(nusc, ann_token, ego_translation, inverse_quat)
                 nodes_data.append(target_traj)
 
-    # 3. Μετατροπή σε PyTorch Tensor
+                target_fut = get_target_future(nusc,ann_token,ego_translation,inverse_quat)
+                future_data.append(target_fut)
+
+    # 3. TENSORINGGGGGGGGGG
     node_features = torch.tensor(nodes_data, dtype=torch.float32)
     num_nodes = node_features.shape[0]
 
-    print("-" * 60)
-    print(f"📍 Κόμβοι: {num_nodes} οχήματα")
-    print(f"Διαστάσεις Πίνακα (Tensor Shape): {node_features.shape}")
-    print("Εξήγηση Shape: [Αριθμός Οχημάτων, Χρονικά Βήματα, (X, Y)]")
-    print("-" * 60)
-    
-    # Ας δούμε την πορεία του Κόμβου 0 (Του εαυτού μας)
-    print("Τροχιά (Trajectory) του δικού μας οχήματος τα τελευταία 2 δευτερόλεπτα:")
-    for t in range(5):
-        print(f"Στιγμή t-{4-t}: X={node_features[0][t][0]:.2f}, Y={node_features[0][t][1]:.2f}")
+    #create the FUTUREE
+    future_features = torch.tensor(future_data,dtype=torch.float32)
+
     
     # 4. Ακμές (Όπως ακριβώς πριν)
     sources = [i for i in range(num_nodes) for j in range(num_nodes) if i != j]
     targets = [j for i in range(num_nodes) for j in range(num_nodes) if i != j]
     edge_index = torch.tensor([sources, targets], dtype=torch.long)
     
-    print("-" * 60)
-    print("✅ Ο Χωρο-Χρονικός Γράφος (Spatial-Temporal Graph) είναι 100% Έτοιμος!")
+    return node_features,future_features,edge_index
+
+
+
+def build_dataset(nusc):
+    HIST, FUT = 4, 12
+    all_graphs = []
+    
+    for scene in nusc.scene:                          # για κάθε σκηνή
+        tokens = get_scene_sample_tokens(nusc, scene) # όλα τα samples της
+        anchors = tokens[HIST : len(tokens) - FUT]    # μόνο οι έγκυρες άγκυρες
+        
+        for anchor_token in anchors:                  # για κάθε άγκυρα
+            # get anchor obj
+            sample =   nusc.get('sample',anchor_token)
+
+            # build da graph
+            graph = build_graph_from_sample(nusc,sample)
+            # add to all_graphs
+            all_graphs.append(graph)
+    
+    return all_graphs
+
+
 
 if __name__ == '__main__':
-    build_spatiotemporal_graph()
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    dataroot = os.path.join(current_dir, 'data', 'raw')
+    nusc = NuScenes(version='v1.0-mini', dataroot=dataroot, verbose=False)
+    
+    dataset = build_dataset(nusc)
+    print(f"✅ Έτοιμα {len(dataset)} γράφοι!")
