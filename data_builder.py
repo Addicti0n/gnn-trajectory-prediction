@@ -36,11 +36,13 @@ def get_ego_history(nusc, current_sample, ego_translation, inverse_quat, frames_
 # ---  mellon του Δικού μας Οχήματος ---
 def get_ego_future(nusc, current_sample, ego_translation, inverse_quat, frames_forward=12):
     trajectory = []
+    mask = []
     curr_sample_token = current_sample['next']
     
     for _ in range(frames_forward): 
         if curr_sample_token == '':
             trajectory.append(trajectory[-1] if len(trajectory) > 0 else [0.0, 0.0])
+            mask.append(0.0)
             continue
             
         sample = nusc.get('sample', curr_sample_token)
@@ -52,9 +54,10 @@ def get_ego_future(nusc, current_sample, ego_translation, inverse_quat, frames_f
         local_pos = inverse_quat.rotate(shifted)
         
         trajectory.append([local_pos[0], local_pos[1]])
+        mask.append(1.0)
         curr_sample_token = sample['next'] # Πάμε ένα καρέ μπροστα!
 
-    return trajectory
+    return trajectory,mask
 
 
 
@@ -83,6 +86,7 @@ def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_ba
 #-- get target future  --
 def get_target_future(nusc, ann_token, ego_translation, inverse_quat, frames_forward=12):
     trajectory = []
+    mask = []
     ann = nusc.get('sample_annotation',ann_token)
     curr_ann_token = ann['next'] #<-- t+1
     
@@ -90,6 +94,7 @@ def get_target_future(nusc, ann_token, ego_translation, inverse_quat, frames_for
         if curr_ann_token == '':
             #to oxima eksafanistike h teleiwse h skini padding
             trajectory.append(trajectory[-1] if len(trajectory) > 0 else [0.0, 0.0])
+            mask.append(0.0)
             continue
             
         ann = nusc.get('sample_annotation', curr_ann_token)
@@ -99,9 +104,10 @@ def get_target_future(nusc, ann_token, ego_translation, inverse_quat, frames_for
         local_pos = inverse_quat.rotate(shifted)
         
         trajectory.append([local_pos[0], local_pos[1]])
+        mask.append(1.0)
         curr_ann_token = ann['next']
         
-    return trajectory
+    return trajectory,mask
 
 
 
@@ -130,10 +136,10 @@ def build_graph_from_sample(nusc,sample):
     # 2. a list of nodes not just [x,y]  but 5 time spots
     nodes_data = []
     future_data=[]
-
-    ego_fut = get_ego_future(nusc,sample,ego_translation,inverse_quat)
+    future_mask_data=[]
+    ego_fut,ego_mask = get_ego_future(nusc,sample,ego_translation,inverse_quat)
     future_data.append(ego_fut)
-
+    future_mask_data.append(ego_mask)
     # get our history (node 0)
     ego_traj = get_ego_history(nusc, sample, ego_translation, inverse_quat)
     nodes_data.append(ego_traj)
@@ -150,15 +156,16 @@ def build_graph_from_sample(nusc,sample):
                 target_traj = get_target_history(nusc, ann_token, ego_translation, inverse_quat)
                 nodes_data.append(target_traj)
 
-                target_fut = get_target_future(nusc,ann_token,ego_translation,inverse_quat)
+                target_fut,target_mask = get_target_future(nusc,ann_token,ego_translation,inverse_quat)
                 future_data.append(target_fut)
-
+                future_mask_data.append(target_mask)
     # 3. TENSORINGGGGGGGGGG
     node_features = torch.tensor(nodes_data, dtype=torch.float32)
     num_nodes = node_features.shape[0]
 
     #create the FUTUREE
     future_features = torch.tensor(future_data,dtype=torch.float32)
+    future_mask = torch.tensor(future_mask_data,dtype=torch.float32)
 
     
     # 4. Ακμές (Όπως ακριβώς πριν)
@@ -166,7 +173,7 @@ def build_graph_from_sample(nusc,sample):
     targets = [j for i in range(num_nodes) for j in range(num_nodes) if i != j]
     edge_index = torch.tensor([sources, targets], dtype=torch.long)
     
-    return node_features,future_features,edge_index
+    return node_features,future_features,future_mask,edge_index
 
 
 
