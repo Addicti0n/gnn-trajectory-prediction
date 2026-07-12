@@ -46,3 +46,19 @@ class LaplacianMDNDecoder(nn.Module):
         scales = F.softplus(self.fc_scale(x)).view(N,K,T,D)
         weights = F.softmax(self.fc_weight(x),dim=-1) #dim = -1 in order to normalize last dim k modes
         return mean,scales,weights
+
+
+################### FULL MODEL ################
+class TrajectoryPredictor(nn.Module):
+    def __init__(self,hidden_size=128,num_modes=6,future_len=12):
+        super().__init__()
+        self.encoder = GRUEncoder(input_size=2, hidden_size=hidden_size)
+        self.interactor = GATInteractor(in_channels=hidden_size, out_channels=hidden_size)
+        self.decoder = LaplacianMDNDecoder(in_channels=hidden_size, num_modes=num_modes, future_len=future_len)
+
+    def forward(self,x,edge_index):
+        #x:[N,5,2], edge_index: [2,E]
+        emb = self.encoder(x)
+        enriched = self.interactor(emb,edge_index)
+        means,scales,weights = self.decoder(enriched)
+        return means,scales,weights
