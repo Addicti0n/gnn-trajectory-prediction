@@ -1,4 +1,5 @@
 import torch
+from data_builder import POS_SCALE
 
 @torch.no_grad() #no gradients στην αξιολογηση (για ΟΛΗ αυτή τη συνάρτηση ΔΕΝ καταγράφεις gradien)
 def evaluate(model,dataset):
@@ -26,6 +27,6 @@ def evaluate(model,dataset):
 
     all_ade=torch.cat(all_ade)
     all_fde=torch.cat(all_fde)
-    return all_ade.mean().item(), all_fde.mean().item()
+    return all_ade.mean().item() * POS_SCALE, all_fde.mean().item() * POS_SCALE
 
 
