@@ -23,7 +23,8 @@ w = weights[agent]
 #VISUALIZATION
 plt.figure(figsize=(8,8))
 plt.plot(hist[:,0],hist[:,1], 'ko-', label='History (παρελθον)')
-plt.plot(gt[:,0],gt[:,1], 'g*-', 'b-',linewidth=2,label='Future')
+plt.plot(gt[:,0], gt[:,1], color='black', marker='*', linewidth=3, markersize=12, label='Future (GT)')
+
 for k in range(preds.shape[0]):
 
     plt.plot(preds[k,:,0],preds[k,:,1], '--', alpha=0.6, label=f'Pred {k} (π={w[k]:.2f})')
