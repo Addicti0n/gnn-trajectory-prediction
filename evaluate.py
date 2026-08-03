@@ -8,7 +8,7 @@ def evaluate(model,dataset):
     for node_features, future, mask, edges in dataset:
         means, scales, weights = model(node_features,edges)
 
-        #noly vehicles with full future (12 real steps (mask=1))
+        #only vehicles with full future (12 real steps (mask=1))
         full = (mask.sum(dim=1)==12)
 
         if full.sum()==0:
@@ -28,5 +28,3 @@ def evaluate(model,dataset):
     all_ade=torch.cat(all_ade)
     all_fde=torch.cat(all_fde)
     return all_ade.mean().item() * POS_SCALE, all_fde.mean().item() * POS_SCALE
-
-
