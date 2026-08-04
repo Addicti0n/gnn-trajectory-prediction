@@ -1,6 +1,20 @@
 from nuscenes.map_expansion.map_api import NuScenesMap
 import numpy as np
 from pyquaternion import Quaternion
+import torch
+import torch.nn.functional as F
+
+def offroad_penalty(points_xy,penalty_map,size_m):
+     
+    # points_xy: [P,2] σημεια σε ego meters | 
+    # penalty_map: [H,W] (1=off-road) | -> μεσο penalty
+    half = size_m/ 2.0
+    grid = points_xy/half
+    grid = grid.view(1,-1,1,2) #reshape gia grid_smple: [1,P,1,2]
+    inp = penalty_map.view(1,1, *penalty_map.shape) #[1,1,h,w] 
+    sampled= F.grid_sample(inp,grid,align_corners=False,padding_mode='border')
+    return sampled.mean()
+
 def get_drivable_mask(nusc,sample,size_m=60,canvas=200):
     #find loc (map name) of this sample
     scene = nusc.get('scene', sample['scene_token'])
