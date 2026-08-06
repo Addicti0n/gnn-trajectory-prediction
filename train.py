@@ -31,14 +31,14 @@ for epoch in range(EPOCHS):
 
     avg = total_loss / len(train_set)
 
-    min_ade, min_fde = evaluate(model,val_set) #evaluate every epoch
-
+    min_ade, min_fde, offroad = evaluate(model,val_set) #evaluate every epoch
+ 
     tag = ''
     if min_ade<best_minade:
         best_minade=min_ade
         torch.save(model.state_dict(),'best_model.pth')
         tag= ' SAVE (BEST!)'
-    print(f'epoch {epoch}: train loss={avg:.2f} | val minADE={min_ade:.2f}m | minFDE={min_fde:.2f}m{tag}')
+    print(f'epoch {epoch}: train loss={avg:.2f} | minADE={min_ade:.2f}m | minFDE={min_fde:.2f}m | off-road={offroad*100:.1f}%{tag}')
 
 
 print(f'Best val minADE: {best_minade:.2f}m -> best_model.pth')
