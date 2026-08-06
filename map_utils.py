@@ -4,6 +4,21 @@ from pyquaternion import Quaternion
 import torch
 import torch.nn.functional as F
 
+## Οταν φτιαχνω 244 γραφους ο καθενας καλει την get_drivable_mask που
+## φορτωνει εναν NuScenesMap & η φορτωση χαρτη ειναι αργη
+# 244 φορτωσεις = πολλα λεπτα αναμονης
+## Για αυτο παμε σε caching (memoization) φορτωνω καθε χαρτη μια φορα
+# οι 4 χαρτες φορτωνονται 1 φορα ο καθενας οχι 244
+
+_MAP_CACHE = {}  #μνημη για φορτωμενους χαρτες
+
+def get_map(location):
+    if location not in _MAP_CACHE:
+        _MAP_CACHE[location] = NuScenesMap(dataroot='data/raw', map_name=location)
+    return _MAP_CACHE[location]
+
+
+
 def offroad_penalty(points_xy,penalty_map,size_m):
      
     # points_xy: [P,2] σημεια σε ego meters | 
@@ -22,7 +37,7 @@ def get_drivable_mask(nusc,sample,size_m=60,canvas=200):
     location = log['location']
 
     #load the map!
-    nmap = NuScenesMap(dataroot='data/raw',map_name=location)
+    nmap = get_map(location)                                     # ΝΕΟ (από την cache)
 
     #find the location of our vehicle (global x,y) (using lidar because it has ego_pose)
     lidar = nusc.get('sample_data',sample['data']['LIDAR_TOP'])

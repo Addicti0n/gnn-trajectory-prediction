@@ -3,10 +3,13 @@ import numpy as np
 import torch
 from nuscenes.nuscenes import NuScenes
 from pyquaternion import Quaternion
+from map_utils import get_drivable_mask
 
 
 POS_SCALE = 25.0 #NORMALIZATION OF POSITIONS FOR EASIER LEARNING 
 #(IN EVALUATION REMEMBER TO MULTIPLY AGAIN WITH X25 IN ORDER TO HAVE THE ACTUAL METERS!)
+
+MAP_SIZE_M = 120   # 120m x 120m cost map (±60m γυρω απο το ego)
 
 # ---  Ιστορικό του Δικού μας Οχήματος ---
 def get_ego_history(nusc, current_sample, ego_translation, inverse_quat, frames_back=4):
@@ -177,8 +180,10 @@ def build_graph_from_sample(nusc,sample):
     targets = [j for i in range(num_nodes) for j in range(num_nodes) if i != j]
     edge_index = torch.tensor([sources, targets], dtype=torch.long)
     node_features = node_features / POS_SCALE
-    future_features  = future_features  / POS_SCALE
-    return node_features,future_features,future_mask,edge_index
+    future_features  = future_features  / POS_SCALE   
+    drivable = get_drivable_mask(nusc, sample, size_m=MAP_SIZE_M, canvas=200)   # 1=drivable
+    penalty_map = torch.tensor(1.0 - drivable, dtype=torch.float32)              # 1=OFF-road
+    return node_features, future_features, future_mask, edge_index, penalty_map
 
 
 

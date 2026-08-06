@@ -1,11 +1,11 @@
 import torch
 from data_builder import POS_SCALE
-
+from map_utils import offroad_penalty
 @torch.no_grad() #no gradients στην αξιολογηση (για ΟΛΗ αυτή τη συνάρτηση ΔΕΝ καταγράφεις gradien)
 def evaluate(model,dataset):
     all_ade,all_fde = [],[]
 
-    for node_features, future, mask, edges in dataset:
+    for node_features, future, mask, edges, penalty_map in dataset:
         means, scales, weights = model(node_features,edges)
 
         #only vehicles with full future (12 real steps (mask=1))
