@@ -15,7 +15,7 @@ print(f'Train: {len(train_set)} graphs | val: {len(val_set)} graphs')
 model = TrajectoryPredictor()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)   # μικρότερο LR για σταθερότητα
 EPOCHS = 30
-LAMBDA = 5.0 #WEIGHT OF OFF-ROAD PENALTY
+LAMBDA = 5.0 #WEIGHT parameter for OFF-ROAD PENALTY
 best_minade = float('inf') #find the best minADE (starts from infinity!!)
 for epoch in range(EPOCHS):
     total_loss = 0.0
@@ -36,9 +36,10 @@ for epoch in range(EPOCHS):
     tag = ''
     if min_ade<best_minade:
         best_minade=min_ade
-        torch.save(model.state_dict(),'best_model.pth')
+        torch.save(model.state_dict(), f'model_lambda{int(LAMBDA)}.pth')
+
         tag= ' SAVE (BEST!)'
     print(f'epoch {epoch}: train loss={avg:.2f} | minADE={min_ade:.2f}m | minFDE={min_fde:.2f}m | off-road={offroad*100:.1f}%{tag}')
 
 
-print(f'Best val minADE: {best_minade:.2f}m -> best_model.pth')
+print(f'Best val minADE: {best_minade:.2f}m -> model_lambda{int(LAMBDA)}.pth')

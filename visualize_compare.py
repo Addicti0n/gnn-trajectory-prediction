@@ -18,9 +18,9 @@ baseline = load('model_lambda0.pth')
 novelty = load('model_lambda5.pth')
 
 #both scene and vehicle for both
-node_features, future, mask, edges, penalty_map = dataset[-1]
+node_features, future, mask, edges, penalty_map = dataset[45]
 
-agent = 0
+agent = 26
 hist= node_features[agent] * POS_SCALE
 gt = future[agent] * POS_SCALE
 half = MAP_SIZE_M / 2
