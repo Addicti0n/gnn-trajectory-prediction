@@ -1,7 +1,7 @@
 import torch.nn as nn
 from torch_geometric.nn import GATConv
 import torch.nn.functional as F
-
+import torch 
 ################### GRU ENCODER ################
 class GRUEncoder(nn.Module):
     def __init__(self, input_size=2, hidden_size=128,num_layers=1):
@@ -30,19 +30,24 @@ class LaplacianMDNDecoder(nn.Module):
         self.num_modes = num_modes
         self.future_len = future_len
         self.out_dim = out_dim
-        
-        # 3 heads. means & scales βγαζουν K*T*2 αριθμους, το weight βγαζει Κ.
-        self.fc_mean = nn.Linear(in_channels, num_modes * future_len * out_dim)
-        self.fc_scale = nn.Linear(in_channels, num_modes * future_len * out_dim)
-        self.fc_weight = nn.Linear(in_channels,num_modes)
+        self.goal_head = nn.Linear(in_channels,num_modes * out_dim) #predicts k goals
+
+        # means/scales παιρνουν (embedding + goal) και βγαζουν 1 τροχια ανα mode
+        self.fc_mean = nn.Linear(in_channels + out_dim, future_len * out_dim)
+        self.fc_scale = nn.Linear(in_channels + out_dim, future_len * out_dim) 
+        self.fc_weight = nn.Linear(in_channels ,num_modes)
 
     def forward(self,x):
         # x: [N,128]
         N = x.shape[0]
         K,T,D = self.num_modes, self.future_len, self.out_dim
 
-        mean = self.fc_mean(x).view(N,K,T,D)
-        scales = F.softplus(self.fc_scale(x)).view(N,K,T,D)
+
+        goals = self.goal_head(x).view(N,K,D) #δλδ [N,K,2] οι στοχοι
+        x_exp = x.unsqueeze(1).expand(-1,K,-1) #[N,K,128] αντιγραφο ανα mode
+        cond = torch.cat([x_exp,goals], dim=-1) #[N,K,130] EMBEDDING +GOAL
+        mean = self.fc_mean(cond).view(N,K,T,D)
+        scales = F.softplus(self.fc_scale(cond)).view(N,K,T,D)
         weights = F.softmax(self.fc_weight(x),dim=-1) #dim = -1 in order to normalize last dim k modes
         return mean,scales,weights
 
