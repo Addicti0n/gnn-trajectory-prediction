@@ -49,13 +49,13 @@ HD-map drivable-area boundaries, minimizing physically implausible trajectories.
 
 - [x] Environment setup + nuScenes v1.0-mini acquired
 - [x] Spatio-temporal graph construction (history) — *in progress*
-- [ ] Future trajectory extraction (labels)
-- [ ] Dataset-wide windowing / Dataset class
-- [ ] HD-map / drivable-area integration
-- [ ] Model (GRU + GAT + Laplacian MDN)
-- [ ] Map-Aware Loss
-- [ ] Training + evaluation
-- [ ] Visualizations
+- [x] Future trajectory extraction (labels)
+- [x] Dataset-wide windowing / Dataset class
+- [x] HD-map / drivable-area integration
+- [x] Model (GRU + GAT + Laplacian MDN)
+- [x] Map-Aware Loss
+- [x] Training + evaluation
+- [x] Visualizations
 
 ## Repository Structure
 
