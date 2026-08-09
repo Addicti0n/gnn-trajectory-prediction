@@ -57,16 +57,6 @@ HD-map drivable-area boundaries, minimizing physically implausible trajectories.
 - [x] Training + evaluation
 - [x] Visualizations
 
-## Repository Structure
-
-```
-GNN_Thesis_Project/
-├── data/              # nuScenes (git-ignored — not committed)
-├── data_builder.py    # spatio-temporal graph construction
-├── requirements.txt
-└── README.md
-```
-
 ## References
 
 1. Gulzar, Muhammad & Muhammad (2025). *GC-GAT: Multimodal Vehicular Trajectory Prediction Using Graph Goal Conditioning and Cross-Context Attention.* IEEE RA-L.
