@@ -1,28 +1,34 @@
 import torch, sys
 from statistics import mean, stdev
 from nuscenes.nuscenes import NuScenes
-from data_builder import build_dataset, POS_SCALE, MAP_SIZE_M
+from data_builder import build_dataset, POS_SCALE, MAP_SIZE_M,split_by_scene   
 from model import TrajectoryPredictor
 from loss import laplacian_mdn_loss
 from evaluate import evaluate
 from map_utils import offroad_penalty
+import random
+#nusc = NuScenes(version='v1.0-mini', dataroot='data/raw', verbose=False)
+#dataset = build_dataset(nusc)
+dataset = torch.load('dataset_trainval.pt', weights_only=False)
 
-nusc = NuScenes(version='v1.0-mini', dataroot='data/raw', verbose=False)
-dataset = build_dataset(nusc)
-split = int(0.8*len(dataset)); train_set = dataset[:split]; val_set = dataset[split:]
+train_set, val_set, test_set = split_by_scene(dataset)
+GOAL_W=1.0 #WEIGHT GOAL AUXILIARY LOSS
 
-def train_one(LAMBDA, seed, epochs=30):
-    torch.manual_seed(seed)                    # ← σταθερό seed για επαναληψιμότητα
+def train_one(LAMBDA, seed, epochs=10):
+    torch.manual_seed(seed)     
+    random.seed(seed)               # ← σταθερό seed για επαναληψιμότητα
     model = TrajectoryPredictor()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
     best = (float('inf'), 0, 0)
     for epoch in range(epochs):
-        for nf, fut, mask, edges, pmap in train_set:
+        random.shuffle(train_set)
+        for nf, fut, mask, edges, pmap, _ in train_set:
             opt.zero_grad()
-            means, scales, weights = model(nf, edges)
+            means, scales, weights,goals = model(nf, edges)
             mdn = laplacian_mdn_loss(means, scales, weights, fut, mask)
             off = offroad_penalty(means.reshape(-1,2)*POS_SCALE, pmap, MAP_SIZE_M)
-            (mdn + LAMBDA*off).backward()
+            goal_loss = ((goals - means[:, :, -1, :])**2).mean()
+            (mdn + LAMBDA*off + GOAL_W*goal_loss).backward()
             opt.step()
         ade, fde, offroad = evaluate(model, val_set)
         if ade < best[0]: best = (ade, fde, offroad)

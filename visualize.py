@@ -10,9 +10,9 @@ model = TrajectoryPredictor()
 model.load_state_dict(torch.load('best_model.pth'))
 model.eval()
 
-node_features,future,mask,edges,penalty_map = dataset[-1] 
+node_features,future,mask,edges,penalty_map, _ = dataset[-1] 
 with torch.no_grad():
-    means,scales,weights = model(node_features,edges)
+    means,scales,weights,goals = model(node_features,edges)
 
 #choose our vehicle and de-normalize (we want meters)
 agent=0

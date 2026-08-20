@@ -66,6 +66,17 @@ def get_ego_future(nusc, current_sample, ego_translation, inverse_quat, frames_f
 
     return trajectory,mask
 
+def split_by_scene(dataset, train_frac=0.70, val_frac=0.15):
+    """Scene-level 3-way split -> (train, val, test). Καμια διαρροη μεταξυ splits."""
+    scene_ids = sorted(set(g[5] for g in dataset))
+    n = len(scene_ids)
+    train_ids = set(scene_ids[: int(train_frac*n)])
+    val_ids   = set(scene_ids[int(train_frac*n) : int((train_frac+val_frac)*n)])
+    test_ids  = set(scene_ids[int((train_frac+val_frac)*n) :])
+    train = [g for g in dataset if g[5] in train_ids]
+    val   = [g for g in dataset if g[5] in val_ids]
+    test  = [g for g in dataset if g[5] in test_ids]
+    return train, val, test
 
 
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ 2: Ιστορικό των Άλλων Οχημάτων ---
@@ -182,7 +193,7 @@ def build_graph_from_sample(nusc,sample):
     node_features = node_features / POS_SCALE
     future_features  = future_features  / POS_SCALE   
     drivable = get_drivable_mask(nusc, sample, size_m=MAP_SIZE_M, canvas=200)   # 1=drivable
-    penalty_map = torch.tensor(1.0 - drivable, dtype=torch.float32)              # 1=OFF-road
+    penalty_map = torch.tensor(1.0 - drivable, dtype=torch.uint8)     #changed from float32 (because its 1 byte instead of 4)         # 1=OFF-road
     return node_features, future_features, future_mask, edge_index, penalty_map
 
 
@@ -191,7 +202,7 @@ def build_dataset(nusc):
     HIST, FUT = 4, 12
     all_graphs = []
     
-    for scene in nusc.scene:                          # για κάθε σκηνή
+    for scene_idx,scene in enumerate(nusc.scene):                          # για κάθε σκηνή
         tokens = get_scene_sample_tokens(nusc, scene) # όλα τα samples της
         anchors = tokens[HIST : len(tokens) - FUT]    # μόνο οι έγκυρες άγκυρες
         
@@ -202,7 +213,7 @@ def build_dataset(nusc):
             # build da graph
             graph = build_graph_from_sample(nusc,sample)
             # add to all_graphs
-            all_graphs.append(graph)
+            all_graphs.append(graph +(scene_idx,))
     
     return all_graphs
 

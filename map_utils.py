@@ -17,6 +17,24 @@ def get_map(location):
         _MAP_CACHE[location] = NuScenesMap(dataroot='data/raw', map_name=location)
     return _MAP_CACHE[location]
 
+@torch.no_grad()
+def offroad_flags(trajs_xy, penalty_map, size_m, thresh=0.5):
+    """
+    trajs_xy: [M, T, 2] τροχιες σε ego meters
+    Επιστρεφει: [M] με 1.0 αν η τροχια βγαινει εκτος δρομου εστω σε ΕΝΑ σημειο
+    """
+    M, T, _ = trajs_xy.shape
+    half = size_m / 2.0
+    grid = (trajs_xy / half).reshape(1, -1, 1, 2)
+    inp = penalty_map.float().view(1, 1, *penalty_map.shape)
+    sampled = F.grid_sample(inp, grid, mode='nearest',
+                            align_corners=False, padding_mode='border')
+    sampled = sampled.view(M, T)                    # [M,T] τιμες 0/1 ανα σημειο
+
+     #     ποιες τροχιες εχουν ΕΣΤΩ ΕΝΑ; -> .any(dim=1)
+    offroad_any = (sampled > thresh).any(dim=1)
+
+    return offroad_any.float()
 
 
 def offroad_penalty(points_xy,penalty_map,size_m):
@@ -26,7 +44,7 @@ def offroad_penalty(points_xy,penalty_map,size_m):
     half = size_m/ 2.0
     grid = points_xy/half
     grid = grid.view(1,-1,1,2) #reshape gia grid_smple: [1,P,1,2]
-    inp = penalty_map.view(1,1, *penalty_map.shape) #[1,1,h,w] 
+    inp = penalty_map.float().view(1,1, *penalty_map.shape) #[1,1,h,w] 
     sampled= F.grid_sample(inp,grid,align_corners=False,padding_mode='border')
     return sampled.mean()
 

@@ -49,7 +49,7 @@ class LaplacianMDNDecoder(nn.Module):
         mean = self.fc_mean(cond).view(N,K,T,D)
         scales = F.softplus(self.fc_scale(cond)).view(N,K,T,D)
         weights = F.softmax(self.fc_weight(x),dim=-1) #dim = -1 in order to normalize last dim k modes
-        return mean,scales,weights
+        return mean,scales,weights,goals
 
 
 ################### FULL MODEL ################
@@ -64,5 +64,5 @@ class TrajectoryPredictor(nn.Module):
         #x:[N,5,2], edge_index: [2,E]
         emb = self.encoder(x)
         enriched = self.interactor(emb,edge_index)
-        means,scales,weights = self.decoder(enriched)
-        return means,scales,weights
+        means,scales,weights,goals = self.decoder(enriched)
+        return means,scales,weights,goals

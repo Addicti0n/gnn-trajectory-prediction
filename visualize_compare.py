@@ -18,7 +18,7 @@ baseline = load('model_lambda0.pth')
 novelty = load('model_lambda5.pth')
 
 #both scene and vehicle for both
-node_features, future, mask, edges, penalty_map = dataset[45]
+node_features, future, mask, edges, penalty_map, _ = dataset[45]
 
 agent = 26
 hist= node_features[agent] * POS_SCALE
@@ -30,7 +30,7 @@ fig, axes = plt.subplots(1,2, figsize=(16,8))
 for ax, model, title in [(axes[0],baseline,'Baseline (LAMBDA=0)'),
                          (axes[1],novelty,'Map-Aware (LAMBDA=5)')]:
     with torch.no_grad():
-        means,scales,weights = model(node_features,edges)
+        means,scales,weights,goals = model(node_features,edges)
     preds = means[agent] * POS_SCALE
     ax.imshow(drivable,cmap='Greys',origin='lower',extent=[-half,half,-half,half], alpha=0.25)
     ax.plot(hist[:,0], hist[:,1], 'o-',color='dimgray',label='Past (ιστορικο)')
