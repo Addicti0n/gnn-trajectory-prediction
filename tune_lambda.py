@@ -7,14 +7,14 @@ from evaluate import evaluate
 from map_utils import offroad_penalty
 import random
 
-nusc = NuScenes(version='v1.0-mini', dataroot='data/raw', verbose=False)
+#nusc = NuScenes(version='v1.0-mini', dataroot='data/raw', verbose=False)
 #dataset = build_dataset(nusc)
 dataset = torch.load('dataset_trainval.pt', weights_only=False)
 
 train_set, val_set, test_set = split_by_scene(dataset)
 GOAL_W=1.0 #WEIGHT GOAL AUXILIARY LOSS
 
-def train_one(LAMBDA,epochs=10):
+def train_one(LAMBDA,epochs=120):
     model = TrajectoryPredictor()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
     best = (float('inf'),0,0) #(minAde,minFDE,off road) best epoch
@@ -25,10 +25,21 @@ def train_one(LAMBDA,epochs=10):
             means,scales,weights,goals = model(nf,edges)
             mdn = laplacian_mdn_loss(means,scales,weights,fut,mask)
             off = offroad_penalty(means.reshape(-1,2)*POS_SCALE,pmap,MAP_SIZE_M)
-            goal_loss = ((goals - means[:, :, -1, :])**2).mean()
+            valid = mask[:, -1] == 1
+            if valid.any():
+                gt_end = fut[valid, -1, :]
+                g      = goals[valid]
+                d      = ((g - gt_end.unsqueeze(1))**2).sum(-1)
+                goal_loss = d.min(dim=1).values.mean()
+            else:
+                goal_loss = torch.zeros((), device=means.device)
             (mdn + LAMBDA*off + GOAL_W*goal_loss).backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)   # ← ΝΕΟ
+
             opt.step()
-        ade,fde,offroad=evaluate(model,val_set)
+        r = evaluate(model, val_set)
+        ade, fde, offroad = r['minADE'], r['minFDE'], r['offroad']
+
         if ade<best[0]:
             best=(ade,fde,offroad)
     return best

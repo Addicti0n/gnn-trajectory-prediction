@@ -48,7 +48,8 @@ def offroad_penalty(points_xy,penalty_map,size_m):
     sampled= F.grid_sample(inp,grid,align_corners=False,padding_mode='border')
     return sampled.mean()
 
-def get_drivable_mask(nusc,sample,size_m=60,canvas=200):
+def get_drivable_mask(nusc, sample, size_m=120, canvas=200):     # 60 → 120
+
     #find loc (map name) of this sample
     scene = nusc.get('scene', sample['scene_token'])
     log = nusc.get('log', scene['log_token'])

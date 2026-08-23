@@ -1,55 +1,63 @@
 import torch
-from nuscenes.nuscenes import NuScenes
-from data_builder import build_dataset, POS_SCALE,MAP_SIZE_M,split_by_scene   
+from data_builder import POS_SCALE, MAP_SIZE_M, split_by_scene
 from model import TrajectoryPredictor
 from loss import laplacian_mdn_loss
 from evaluate import evaluate
 from map_utils import offroad_penalty
 import random
 
-#nusc = NuScenes(version='v1.0-mini', dataroot='data/raw', verbose=False)
-#dataset = build_dataset(nusc) # OLD
-dataset= torch.load('dataset_trainval.pt', weights_only=False)
+dataset = torch.load('dataset_trainval.pt', weights_only=False)
 train_set, val_set, test_set = split_by_scene(dataset)
+print(f'Graphs: {len(train_set)}/{len(val_set)}/{len(test_set)}')
 
-print(f'Γραφοι: {len(train_set)}/{len(val_set)}/{len(test_set)}')
 model = TrajectoryPredictor()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001)   # μικρότερο LR για σταθερότητα
-EPOCHS = 10 #30
-LAMBDA = 5.0 #WEIGHT parameter for OFF-ROAD PENALTY
-GOAL_W =1.0 #weight of goal auxiliary loss
-best_minade = float('inf') #find the best minADE (starts from infinity!!)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+EPOCHS = 45
+LAMBDA = 5.0        # βαρος off-road penalty
+GOAL_W = 1.0        # βαρος goal auxiliary loss
+best_minade = float('inf')
+
 for epoch in range(EPOCHS):
+    model.train()
     random.shuffle(train_set)
     total_loss = 0.0
+
     for node_features, future, mask, edges, penalty_map, _ in train_set:
         optimizer.zero_grad()
-        means, scales, weights,goals = model(node_features, edges)
+        means, scales, weights, goals = model(node_features, edges)
         mdn = laplacian_mdn_loss(means, scales, weights, future, mask)
-        offroad = offroad_penalty(means.reshape(-1,2)* POS_SCALE,penalty_map,MAP_SIZE_M)
-        goal_loss = ((goals - means[:, :, -1, :])**2).mean()
+        offroad = offroad_penalty(means.reshape(-1, 2) * POS_SCALE, penalty_map, MAP_SIZE_M)
+        valid = mask[:, -1] == 1
+        if valid.any():
+            gt_end = future[valid, -1, :]
+            g      = goals[valid]
+            d      = ((g - gt_end.unsqueeze(1))**2).sum(-1)
+            goal_loss = d.min(dim=1).values.mean()
+        else:
+            goal_loss = torch.zeros((), device=means.device)
 
         loss = mdn + LAMBDA*offroad + GOAL_W*goal_loss
-
-
         loss.backward()
-        optimizer.step()                 #χωρίς αυτό δεν μαθαίνει
-        total_loss += loss.item()        #για σωστό avg
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        optimizer.step()
+        total_loss += loss.item()
 
     avg = total_loss / len(train_set)
+    r = evaluate(model, val_set)
 
-    min_ade, min_fde, offroad = evaluate(model,val_set) #evaluate every epoch
- 
     tag = ''
-    if min_ade<best_minade:
-        best_minade=min_ade
-        torch.save(model.state_dict(), f'model_lambda{int(LAMBDA)}.pth')
+    if r['minADE'] < best_minade:
+        best_minade = r['minADE']
+        torch.save(model.state_dict(), f'model_lambda{LAMBDA:g}.pth')
+        tag = ' SAVE (BEST!)'
 
-        tag= ' SAVE (BEST!)'
-    print(f'epoch {epoch}: train loss={avg:.2f} | minADE={min_ade:.2f}m | minFDE={min_fde:.2f}m | off-road={offroad*100:.1f}%{tag}')
-# Τελικη αξιολογηση στο TEST (το αγγιζουμε ΜΙΑ φορα!)
-model.load_state_dict(torch.load(f'model_lambda{int(LAMBDA)}.pth'))
-t_ade, t_fde, t_off = evaluate(model, test_set)
-print(f'--- TEST (unbiased) --- minADE={t_ade:.2f}m | minFDE={t_fde:.2f}m | off-road={t_off*100:.1f}%')
+    print(f"epoch {epoch}: loss={avg:.2f} | ADE={r['minADE']:.2f}m | FDE={r['minFDE']:.2f}m | "
+          f"MR={r['MR']*100:.0f}% | off={r['offroad']*100:.0f}% | ADE_noego={r['minADE_noego']:.2f}m{tag}")
 
-
+# --- Τελικη αξιολογηση στο TEST (μια φορα!) ---
+model.load_state_dict(torch.load(f'model_lambda{LAMBDA:g}.pth'))
+r = evaluate(model, test_set)
+print(f"--- TEST (unbiased) --- ADE={r['minADE']:.2f}m | FDE={r['minFDE']:.2f}m | "
+      f"MR={r['MR']*100:.1f}% | off-road={r['offroad']*100:.1f}%")
+print(f"    (no ego)           ADE={r['minADE_noego']:.2f}m | FDE={r['minFDE_noego']:.2f}m | "
+      f"MR={r['MR_noego']*100:.1f}% | off-road={r['offroad_noego']*100:.1f}%")

@@ -46,8 +46,13 @@ class LaplacianMDNDecoder(nn.Module):
         goals = self.goal_head(x).view(N,K,D) #δλδ [N,K,2] οι στοχοι
         x_exp = x.unsqueeze(1).expand(-1,K,-1) #[N,K,128] αντιγραφο ανα mode
         cond = torch.cat([x_exp,goals], dim=-1) #[N,K,130] EMBEDDING +GOAL
-        mean = self.fc_mean(cond).view(N,K,T,D)
-        scales = F.softplus(self.fc_scale(cond)).view(N,K,T,D)
+        deltas = self.fc_mean(cond).view(N, K, T, D)    # ΜΕΤΑΤΟΠΙΣΕΙΣ οχι θεσεις
+        mean   = torch.cumsum(deltas, dim=2)            # καθε βημα = αθροισμα προηγουμενων
+
+
+        #softplus δινει παντα >0 αλλα πολλεσ φορεσ φτανει στο 0 (underflow for float32)
+        scales = F.softplus(self.fc_scale(cond)).view(N,K,T,D) + 1e-2      
+
         weights = F.softmax(self.fc_weight(x),dim=-1) #dim = -1 in order to normalize last dim k modes
         return mean,scales,weights,goals
 

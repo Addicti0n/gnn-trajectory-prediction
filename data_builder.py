@@ -4,7 +4,7 @@ import torch
 from nuscenes.nuscenes import NuScenes
 from pyquaternion import Quaternion
 from map_utils import get_drivable_mask
-
+import random
 
 POS_SCALE = 25.0 #NORMALIZATION OF POSITIONS FOR EASIER LEARNING 
 #(IN EVALUATION REMEMBER TO MULTIPLY AGAIN WITH X25 IN ORDER TO HAVE THE ACTUAL METERS!)
@@ -26,7 +26,8 @@ def get_ego_history(nusc, current_sample, ego_translation, inverse_quat, frames_
         lidar_data = nusc.get('sample_data', sample['data']['LIDAR_TOP'])
         ego_pose = nusc.get('ego_pose', lidar_data['ego_pose_token'])
         
-        # Agent-Centric Μετασχηματισμός (σε σχέση με το ΠΟΥ ΕΙΜΑΣΤΕ ΤΩΡΑ)
+         # Ego-Centric Μετασχηματισμός (ΕΝΑ κοινό frame, κεντραρισμένο στο ego)
+
         global_pos = np.array(ego_pose['translation'])
         shifted = global_pos - ego_translation
         local_pos = inverse_quat.rotate(shifted)
@@ -66,9 +67,15 @@ def get_ego_future(nusc, current_sample, ego_translation, inverse_quat, frames_f
 
     return trajectory,mask
 
-def split_by_scene(dataset, train_frac=0.70, val_frac=0.15):
-    """Scene-level 3-way split -> (train, val, test). Καμια διαρροη μεταξυ splits."""
+
+def split_by_scene(dataset, train_frac=0.70, val_frac=0.15, seed=0, shuffle=True):
+    """Scene-level 3-way split.
+    shuffle=True  -> τυχαιο (iid) split, αναμεμειγμενες τοποθεσιες  [ΚΑΝΟΝΙΚΟ]
+    shuffle=False -> σειριακο split = γεωγραφικος διαχωρισμος       [ΠΕΙΡΑΜΑ domain-shift]
+    """
     scene_ids = sorted(set(g[5] for g in dataset))
+    if shuffle:
+        random.Random(seed).shuffle(scene_ids)      
     n = len(scene_ids)
     train_ids = set(scene_ids[: int(train_frac*n)])
     val_ids   = set(scene_ids[int(train_frac*n) : int((train_frac+val_frac)*n)])
@@ -77,7 +84,6 @@ def split_by_scene(dataset, train_frac=0.70, val_frac=0.15):
     val   = [g for g in dataset if g[5] in val_ids]
     test  = [g for g in dataset if g[5] in test_ids]
     return train, val, test
-
 
 # --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ 2: Ιστορικό των Άλλων Οχημάτων ---
 def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_back=4):

@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 from nuscenes.nuscenes import NuScenes
 from data_builder import build_dataset, POS_SCALE, MAP_SIZE_M
 from model import TrajectoryPredictor
+import sys                                                        # στην κορυφη
 
 nusc = NuScenes(version='v1.0-mini',dataroot='data/raw',verbose=False)
 dataset= build_dataset(nusc)
+path = sys.argv[1] if len(sys.argv) > 1 else 'model_lambda5.pth'
 model = TrajectoryPredictor()
-model.load_state_dict(torch.load('best_model.pth'))
+model.load_state_dict(torch.load(path))
 model.eval()
 
 node_features,future,mask,edges,penalty_map, _ = dataset[-1] 
