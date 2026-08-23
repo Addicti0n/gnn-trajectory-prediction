@@ -14,11 +14,12 @@ dataset = torch.load('dataset_trainval.pt', weights_only=False)
 train_set, val_set, test_set = split_by_scene(dataset)
 GOAL_W=1.0 #WEIGHT GOAL AUXILIARY LOSS
 
-def train_one(LAMBDA,epochs=120):
+def train_one(LAMBDA,epochs=15):
     model = TrajectoryPredictor()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
-    best = (float('inf'),0,0) #(minAde,minFDE,off road) best epoch
+    best = (float('inf'),0,0,0) #(minAde,minFDE,off road) best epoch
     for epoch in range(epochs):
+        model.train()
         random.shuffle(train_set)
         for nf,fut,mask,edges,pmap, _ in train_set:
             opt.zero_grad()
@@ -38,16 +39,15 @@ def train_one(LAMBDA,epochs=120):
 
             opt.step()
         r = evaluate(model, val_set)
-        ade, fde, offroad = r['minADE'], r['minFDE'], r['offroad']
 
-        if ade<best[0]:
-            best=(ade,fde,offroad)
+        if r['minADE'] < best[0]:
+            best = (r['minADE'], r['minFDE'], r['MR'], r['offroad'])
     return best
 
 
-print(f'{"LAMBDA":>7} | {"minADE":>7} | {"minFDE":>7} | {"off-road":>8}')
-print('-'*42)
+print(f'{"LAMBDA":>7} | {"minADE":>8} | {"minFDE":>8} | {"MR":>6} | {"off-road":>8}')
+print('-'*52)
 for L in [0, 1, 2, 5, 10]:
-    ade, fde, off = train_one(float(L))
-    print(f'{L:>7} | {ade:>6.2f}m | {fde:>6.2f}m | {off*100:>6.1f}%')
-    import sys; sys.stdout.flush()   
+    ade, fde, mr, off = train_one(float(L))
+    print(f'{L:>7} | {ade:>7.2f}m | {fde:>7.2f}m | {mr*100:>5.1f}% | {off*100:>7.1f}%')
+    import sys; sys.stdout.flush()
