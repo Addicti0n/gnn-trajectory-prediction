@@ -35,7 +35,7 @@ def train_one(LAMBDA,epochs=15):
             else:
                 goal_loss = torch.zeros((), device=means.device)
             (mdn + LAMBDA*off + GOAL_W*goal_loss).backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)   # ← ΝΕΟ
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0) 
 
             opt.step()
         r = evaluate(model, val_set)

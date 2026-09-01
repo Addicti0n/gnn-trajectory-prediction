@@ -9,8 +9,8 @@ from map_utils import offroad_penalty
 dataset = torch.load('dataset_trainval.pt', weights_only=False)
 train_set, val_set, test_set = split_by_scene(dataset)
 
-SUBSET = 5000        # υποσυνολο train (υπολογιστικοι περιορισμοι)
-EPOCHS = 40          # αρκετα ωστε να δρασει ο χαρτης
+SUBSET = 5000        # υποσυνολο train (not enough)
+EPOCHS = 40          # αρκετα για να δρασει ο χαρτης
 SEEDS  = 3
 GOAL_W = 1.0
 
@@ -41,7 +41,7 @@ def train_one(LAMBDA, seed):
         print(f'  lam={LAMBDA:g} seed={seed} ep={epoch:2d}: '
               f'ADE={r["minADE"]:.2f} FDE={r["minFDE"]:.2f} off={r["offroad"]*100:.1f}%')
         sys.stdout.flush()
-    return r                              # ΤΕΛΙΚΟ epoch (οχι best) - δικαιη συγκριση
+    return r                              # ΤΕΛΙΚΟ epoch (οχι best, fair συγκριση)
 
 print(f'SUBSET={SUBSET} EPOCHS={EPOCHS} SEEDS={SEEDS}\n')
 for L in [0.0, 5.0]:
