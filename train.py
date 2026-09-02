@@ -12,8 +12,8 @@ print(f'Graphs: {len(train_set)}/{len(val_set)}/{len(test_set)}')
 
 model = TrajectoryPredictor()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-EPOCHS = 15 #45
-LAMBDA = 0.0 #5.0        # βαρος off-road penalty
+EPOCHS = 45 #15 
+LAMBDA = 5.0  #0.0       # βαρος off-road penalty
 GOAL_W = 1.0        # βαρος goal auxiliary loss
 best_minade = float('inf')
 

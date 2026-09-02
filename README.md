@@ -29,6 +29,7 @@ Evaluated on the **held-out test split**, 5 random seeds per configuration, fixe
 statistically indistinguishable displacement error.**
 
 ![Training curves](curves.png)
+![Qualitative comparison](comparison.png)
 
 *Off-Road Rate and minADE per epoch, λ=0 vs λ=5 (3 seeds). Bold lines: 5-epoch moving average;
 faded lines: raw values; shaded bands: ±1 std across seeds.*
