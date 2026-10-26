@@ -37,18 +37,19 @@ class LaplacianMDNDecoder(nn.Module):
         self.fc_scale = nn.Linear(in_channels + out_dim, future_len * out_dim) 
         self.fc_weight = nn.Linear(in_channels ,num_modes)
 
-    def forward(self,x):
+    def forward(self,x,last_pos):
         # x: [N,128]
-        N = x.shape[0]
+        N = last_pos.shape[0]
         K,T,D = self.num_modes, self.future_len, self.out_dim
 
-
-        goals = self.goal_head(x).view(N,K,D) #δλδ [N,K,2] οι στοχοι
+        goal_offset = self.goal_head(x).view(N,K,D)
+        goals = goal_offset + last_pos.unsqueeze(1) # [N,K,2] goals
         x_exp = x.unsqueeze(1).expand(-1,K,-1) #[N,K,128] αντιγραφο ανα mode
-        cond = torch.cat([x_exp,goals], dim=-1) #[N,K,130] EMBEDDING +GOAL
+        cond = torch.cat([x_exp,goal_offset], dim=-1) #[N,K,130] EMBEDDING +GOAL
         deltas = self.fc_mean(cond).view(N, K, T, D)    # ΜΕΤΑΤΟΠΙΣΕΙΣ οχι θεσεις
-        mean   = torch.cumsum(deltas, dim=2)            # καθε βημα = αθροισμα προηγουμενων
-
+        start = last_pos.unsqueeze(1).unsqueeze(1)
+        mean   = torch.cumsum(deltas, dim=2)   + start         # καθε βημα = αθροισμα προηγουμενων
+        
 
         #softplus δινει παντα >0 αλλα πολλεσ φορεσ φτανει στο 0 (underflow for float32)
         scales = F.softplus(self.fc_scale(cond)).view(N,K,T,D) + 1e-2      
@@ -69,5 +70,15 @@ class TrajectoryPredictor(nn.Module):
         #x:[N,5,2], edge_index: [2,E]
         emb = self.encoder(x)
         enriched = self.interactor(emb,edge_index)
-        means,scales,weights,goals = self.decoder(enriched)
+        means,scales,weights,goals = self.decoder(enriched,x[:, -1])
         return means,scales,weights,goals
+
+
+
+if __name__ == '__main__':
+    model = TrajectoryPredictor()
+    x = torch.randn(7, 5, 2)                      # 7 οχήματα
+    edge_index = torch.tensor([[0, 1], [1, 0]])
+    means, scales, weights, goals = model(x, edge_index)
+    print(means.shape)                            # περιμένουμε [7, 6, 12, 2]
+    print(goals.shape)                            # περιμένουμε [7, 6, 2]
