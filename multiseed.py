@@ -16,7 +16,9 @@ GOAL_W = 1.0
 
 def train_one(LAMBDA, seed):
     torch.manual_seed(seed); random.seed(seed)
-    tr = train_set[:SUBSET]
+    sub = list(train_set)              
+    random.Random(seed).shuffle(sub)     
+    tr = sub[:SUBSET]    
     model = TrajectoryPredictor()
     opt = torch.optim.Adam(model.parameters(), lr=0.001)
     r = None
