@@ -85,13 +85,14 @@ def split_by_scene(dataset, train_frac=0.70, val_frac=0.15, seed=0, shuffle=True
     test  = [g for g in dataset if g[5] in test_ids]
     return train, val, test
 
-# --- ΒΟΗΘΗΤΙΚΗ ΣΥΝΑΡΤΗΣΗ 2: Ιστορικό των Άλλων Οχημάτων ---
+# --- history of other vehicles ---
 def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_back=4):
     trajectory = []
     curr_ann_token = ann_token
-    
+    mask = []
     for _ in range(frames_back + 1):
         if curr_ann_token == '':
+            mask.append(0.0)
             trajectory.append(trajectory[-1] if len(trajectory) > 0 else [0.0, 0.0])
             continue
             
@@ -103,9 +104,10 @@ def get_target_history(nusc, ann_token, ego_translation, inverse_quat, frames_ba
         
         trajectory.append([local_pos[0], local_pos[1]])
         curr_ann_token = ann['prev']
-        
+        mask.append(1.0)
     trajectory.reverse()
-    return trajectory
+    mask.reverse()
+    return trajectory,mask
 
 #-- get target future  --
 def get_target_future(nusc, ann_token, ego_translation, inverse_quat, frames_forward=12):
@@ -159,6 +161,7 @@ def build_graph_from_sample(nusc,sample):
 
     # 2. a list of nodes not just [x,y]  but 5 time spots
     nodes_data = []
+    hist_mask_data = []
     future_data=[]
     future_mask_data=[]
     ego_fut,ego_mask = get_ego_future(nusc,sample,ego_translation,inverse_quat)
@@ -167,6 +170,8 @@ def build_graph_from_sample(nusc,sample):
     # get our history (node 0)
     ego_traj = get_ego_history(nusc, sample, ego_translation, inverse_quat)
     nodes_data.append(ego_traj)
+
+    hist_mask_data.append([1.0, 1.0, 1.0, 1.0, 1.0])
 
     #get history loc (nodes) of the other cars
     for ann_token in sample['anns']:
@@ -177,9 +182,9 @@ def build_graph_from_sample(nusc,sample):
             target_local = inverse_quat.rotate(shifted)
             
             if abs(target_local[0]) < 50 and abs(target_local[1]) < 50:
-                target_traj = get_target_history(nusc, ann_token, ego_translation, inverse_quat)
+                target_traj,target_hmask = get_target_history(nusc, ann_token, ego_translation, inverse_quat)
                 nodes_data.append(target_traj)
-
+                hist_mask_data.append(target_hmask) 
                 target_fut,target_mask = get_target_future(nusc,ann_token,ego_translation,inverse_quat)
                 future_data.append(target_fut)
                 future_mask_data.append(target_mask)
@@ -197,6 +202,9 @@ def build_graph_from_sample(nusc,sample):
     targets = [j for i in range(num_nodes) for j in range(num_nodes) if i != j]
     edge_index = torch.tensor([sources, targets], dtype=torch.long)
     node_features = node_features / POS_SCALE
+    hist_mask = torch.tensor(hist_mask_data, dtype=torch.float32) 
+    hist_mask = hist_mask.unsqueeze(-1)                                 # [N, 5] → [N, 5, 1]
+    node_features = torch.cat([node_features, hist_mask], dim=-1) 
     future_features  = future_features  / POS_SCALE   
     drivable = get_drivable_mask(nusc, sample, size_m=MAP_SIZE_M, canvas=200)   # 1=drivable
     penalty_map = torch.tensor(1.0 - drivable, dtype=torch.uint8)     #changed from float32 (because its 1 byte instead of 4)         # 1=OFF-road

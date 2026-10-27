@@ -62,7 +62,7 @@ class LaplacianMDNDecoder(nn.Module):
 class TrajectoryPredictor(nn.Module):
     def __init__(self,hidden_size=128,num_modes=6,future_len=12):
         super().__init__()
-        self.encoder = GRUEncoder(input_size=2, hidden_size=hidden_size)
+        self.encoder = GRUEncoder(input_size=3, hidden_size=hidden_size)
         self.interactor = GATInteractor(in_channels=hidden_size, out_channels=hidden_size)
         self.decoder = LaplacianMDNDecoder(in_channels=hidden_size, num_modes=num_modes, future_len=future_len)
 
@@ -70,14 +70,14 @@ class TrajectoryPredictor(nn.Module):
         #x:[N,5,2], edge_index: [2,E]
         emb = self.encoder(x)
         enriched = self.interactor(emb,edge_index)
-        means,scales,weights,goals = self.decoder(enriched,x[:, -1])
+        means,scales,weights,goals = self.decoder(enriched,x[:, -1,:2])
         return means,scales,weights,goals
 
 
 
 if __name__ == '__main__':
     model = TrajectoryPredictor()
-    x = torch.randn(7, 5, 2)                      # 7 οχήματα
+    x = torch.randn(7, 5, 3)                      # 7 οχήματα
     edge_index = torch.tensor([[0, 1], [1, 0]])
     means, scales, weights, goals = model(x, edge_index)
     print(means.shape)                            # περιμένουμε [7, 6, 12, 2]
