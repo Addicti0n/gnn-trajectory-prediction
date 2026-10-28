@@ -12,10 +12,9 @@ print(f'Graphs: {len(train_set)}/{len(val_set)}/{len(test_set)}')
 
 model = TrajectoryPredictor()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-EPOCHS = 45 #15 
+EPOCHS = 40
 LAMBDA = 5.0  #0.0       # βαρος off-road penalty
 GOAL_W = 1.0        # βαρος goal auxiliary loss
-best_minade = float('inf')
 
 for epoch in range(EPOCHS):
     model.train()
@@ -45,19 +44,19 @@ for epoch in range(EPOCHS):
     avg = total_loss / len(train_set)
     r = evaluate(model, val_set)
 
-    tag = ''
-    if r['minADE'] < best_minade:
-        best_minade = r['minADE']
-        torch.save(model.state_dict(), f'model_lambda{LAMBDA:g}.pth')
-        tag = ' SAVE (BEST!)'
+
 
     print(f"epoch {epoch}: loss={avg:.2f} | ADE={r['minADE']:.2f}m | FDE={r['minFDE']:.2f}m | "
-          f"MR={r['MR']*100:.0f}% | off={r['offroad']*100:.0f}% | ADE_noego={r['minADE_noego']:.2f}m{tag}")
+          f"MR={r['MR']*100:.0f}% | off={r['offroad']*100:.0f}% | ADE_noego={r['minADE_noego']:.2f}m")
 
 # --- Τελικη αξιολογηση στο TEST (μια φορα!) ---
-model.load_state_dict(torch.load(f'model_lambda{LAMBDA:g}.pth'))
+torch.save(model.state_dict(), f'model_lambda{LAMBDA:g}.pth')
+
 r = evaluate(model, test_set)
+
 print(f"--- TEST (unbiased) --- ADE={r['minADE']:.2f}m | FDE={r['minFDE']:.2f}m | "
       f"MR={r['MR']*100:.1f}% | off-road={r['offroad']*100:.1f}%")
 print(f"    (no ego)           ADE={r['minADE_noego']:.2f}m | FDE={r['minFDE_noego']:.2f}m | "
       f"MR={r['MR_noego']*100:.1f}% | off-road={r['offroad_noego']*100:.1f}%")
+print(f"    (moving)           ADE={r['minADE_moving']:.2f}m | FDE={r['minFDE_moving']:.2f}m | "
+      f"MR={r['MR_moving']*100:.1f}% | off-road={r['offroad_moving']*100:.1f}%")
