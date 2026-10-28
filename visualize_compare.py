@@ -19,7 +19,8 @@ node_features, future, mask, edges, penalty_map, _ = test_set[100]
 agent = 0
 
                                    
-hist= node_features[agent] * POS_SCALE
+hist = node_features[agent, :, :2] * POS_SCALE    # [5, 2] μόνο x, y
+
 gt = future[agent] * POS_SCALE
 half = MAP_SIZE_M / 2
 drivable = 1 - penalty_map

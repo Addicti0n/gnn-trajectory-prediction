@@ -1,24 +1,28 @@
 import torch
 import matplotlib.pyplot as plt
-from nuscenes.nuscenes import NuScenes
-from data_builder import build_dataset, POS_SCALE, MAP_SIZE_M
+
+from data_builder import split_by_scene,  POS_SCALE, MAP_SIZE_M
 from model import TrajectoryPredictor
 import sys                                                        # στην κορυφη
 
-nusc = NuScenes(version='v1.0-mini',dataroot='data/raw',verbose=False)
-dataset= build_dataset(nusc)
+
+dataset = torch.load('dataset_trainval.pt', weights_only=False)
+_, _, test_set = split_by_scene(dataset)          # ΜΟΝΟ test (τίμιο για figure)
+
 path = sys.argv[1] if len(sys.argv) > 1 else 'model_lambda5.pth'
 model = TrajectoryPredictor()
 model.load_state_dict(torch.load(path))
 model.eval()
 
-node_features,future,mask,edges,penalty_map, _ = dataset[-1] 
+node_features,future,mask,edges,penalty_map, _ = test_set[0] 
 with torch.no_grad():
     means,scales,weights,goals = model(node_features,edges)
 
 #choose our vehicle and de-normalize (we want meters)
 agent=0
-hist = node_features[agent] * POS_SCALE
+
+hist = node_features[agent, :, :2] * POS_SCALE    # [5, 2] μόνο x, y
+
 gt = future[agent] * POS_SCALE
 preds = means[agent] * POS_SCALE
 w = weights[agent]
