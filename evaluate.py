@@ -7,7 +7,7 @@ MISS_THRESH = 2.0     # μετρα: minFDE > 2m => "miss" (standard nuScenes)
 @torch.no_grad()
 def evaluate(model, dataset):
     model.eval()
-    all_ade, all_fde, all_off, all_isego = [], [], [], []
+    all_ade, all_fde, all_off, all_isego, all_static, all_gt_off = [], [], [], [], [], []
 
     for node_features, future, mask, edges, penalty_map, _ in dataset:
         means, scales, weights, _ = model(node_features, edges)
@@ -29,17 +29,29 @@ def evaluate(model, dataset):
         # off-road στα ΙΔΙΑ οχηματα (συνεπης παρονομαστης)
         trajs = m.reshape(-1, T, 2) * POS_SCALE              # [M*K,T,2]
         all_off.append(offroad_flags(trajs, penalty_map, MAP_SIZE_M).view(M, K))
+        #GT in meters
+        gt_m= future[full] * POS_SCALE   #[M,12,2]
+        #static vehicles (parked)
+        moved= torch.norm(gt_m[:,-1] - gt_m[:,0],dim=-1) # [M]
+        all_static.append(moved<1.0)
+
+        #OFF-ROAD OF GT
+        all_gt_off.append(offroad_flags(gt_m,penalty_map,MAP_SIZE_M))
 
         # (2.2) ποιος ειναι το ego -> κομβος 0
         is_ego = torch.zeros(mask.shape[0], dtype=torch.bool)
         is_ego[0] = True
         all_isego.append(is_ego[full])                       # [M]
 
+
     ade   = torch.cat(all_ade) * POS_SCALE      # -> μετρα
     fde   = torch.cat(all_fde) * POS_SCALE
     off   = torch.cat(all_off)                  # [total_M, K]
     isego = torch.cat(all_isego)
     noego = ~isego
+    static = torch.cat(all_static)
+    gt_off = torch.cat(all_gt_off)
+    moving = ~static
 
     return {
         'minADE':  ade.mean().item(),
@@ -50,4 +62,15 @@ def evaluate(model, dataset):
         'minFDE_noego':  fde[noego].mean().item(),
         'MR_noego':      (fde[noego] > MISS_THRESH).float().mean().item(),
         'offroad_noego': off[noego].mean().item(),
+
+                # --- μόνο ΚΙΝΟΥΜΕΝΑ (οι «δύσκολες ερωτήσεις») ---
+        'minADE_moving':  ade[moving].mean().item(),
+        'minFDE_moving':  fde[moving].mean().item(),
+        'MR_moving':      (fde[moving] > MISS_THRESH).float().mean().item(),
+        'offroad_moving': off[moving].mean().item(),
+
+        # --- το «πάτωμα»: off-road της ΠΡΑΓΜΑΤΙΚΟΤΗΤΑΣ ---
+        'offroad_gt':        gt_off.mean().item(),
+        'offroad_gt_moving': gt_off[moving].mean().item(),
+
     }
