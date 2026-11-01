@@ -3,7 +3,7 @@ from data_builder import POS_SCALE, MAP_SIZE_M, split_by_scene
 from model import TrajectoryPredictor
 from loss import laplacian_mdn_loss
 from evaluate import evaluate
-from map_utils import offroad_penalty
+from map_utils import offroad_penalty_weighted
 import random
 
 dataset = torch.load('dataset_trainval.pt', weights_only=False)
@@ -25,7 +25,7 @@ for epoch in range(EPOCHS):
         optimizer.zero_grad()
         means, scales, weights, goals = model(node_features, edges)
         mdn = laplacian_mdn_loss(means, scales, weights, future, mask)
-        offroad = offroad_penalty(means.reshape(-1, 2) * POS_SCALE, penalty_map, MAP_SIZE_M)
+        offroad = offroad_penalty_weighted(means* POS_SCALE, weights ,mask, penalty_map, MAP_SIZE_M)
         valid = mask[:, -1] == 1
         if valid.any():
             gt_end = future[valid, -1, :]

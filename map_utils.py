@@ -48,6 +48,28 @@ def offroad_penalty(points_xy,penalty_map,size_m):
     sampled= F.grid_sample(inp,grid,align_corners=False,padding_mode='border')
     return sampled.mean()
 
+
+def offroad_penalty_weighted(means_xy, weights, mask, penalty_map, size_m):
+    N, K, T, _ = means_xy.shape
+    half = size_m / 2.0
+    grid = (means_xy / half).view(1, N*K*T, 1, 2)
+    inp = penalty_map.float().view(1, 1, *penalty_map.shape)
+
+    sampled = F.grid_sample(inp, grid, align_corners=False, padding_mode='border')
+    sampled = sampled.view(N, K, T)
+
+    mask_exp = mask.unsqueeze(1)
+    weights_exp = weights.detach().unsqueeze(-1)
+
+    weighted_penalty = sampled * weights_exp * mask_exp
+
+    valid_points = mask.sum()
+    if valid_points > 0:
+        return weighted_penalty.sum() / valid_points
+    return torch.zeros((), device=means_xy.device)
+
+
+
 def get_drivable_mask(nusc, sample, size_m=120, canvas=200):     # 60 → 120
 
     #find loc (map name) of this sample
