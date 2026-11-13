@@ -3,6 +3,7 @@ import numpy as np
 from pyquaternion import Quaternion
 import torch
 import torch.nn.functional as F
+from scipy.ndimage import distance_transform_edt
 
 ## Οταν φτιαχνω 244 γραφους ο καθενας καλει την get_drivable_mask που
 ## φορτωνει εναν NuScenesMap & η φορτωση χαρτη ειναι αργη
@@ -16,6 +17,17 @@ def get_map(location):
     if location not in _MAP_CACHE:
         _MAP_CACHE[location] = NuScenesMap(dataroot='data/raw', map_name=location)
     return _MAP_CACHE[location]
+
+
+def compute_sdf(mask,meters_per_px,clip_m):
+    mask_np = mask.numpy()
+    dist_px = distance_transform_edt(mask_np)
+    dist_m  = meters_per_px * dist_px
+    dist_m = np.clip(dist_m,0,clip_m)
+    dist_m = dist_m/clip_m
+
+    return torch.from_numpy(dist_m).float()
+
 
 @torch.no_grad()
 def offroad_flags(trajs_xy, penalty_map, size_m, thresh=0.5):
