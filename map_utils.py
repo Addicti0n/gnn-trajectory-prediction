@@ -28,6 +28,12 @@ def compute_sdf(mask,meters_per_px,clip_m):
 
     return torch.from_numpy(dist_m).float()
 
+def compute_cost_map(mask, meters_per_px, clip_m):
+    # mask: [H,W] binary (1 = off-road)
+    # returns: [H,W] float in [0,1] = 0.5 * (binary + SDF)
+    sdf = compute_sdf(mask,meters_per_px,clip_m)
+    return (sdf + mask.float())/2
+
 
 @torch.no_grad()
 def offroad_flags(trajs_xy, penalty_map, size_m, thresh=0.5):
